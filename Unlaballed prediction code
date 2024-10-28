@@ -1,0 +1,128 @@
+import pandas as pd
+from sklearn.cluster import KMeans, DBSCAN, AffinityPropagation
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import accuracy_score
+from scipy.stats import mode
+import numpy as np
+
+
+
+
+# Load the labeled dataset to assess clustering accuracy
+df_labeled = pd.read_csv('sla_violation_dataset_90_10_adjusted.csv')
+X_labeled = df_labeled[['CPU Usage', 'Memory Usage', 'Disk I/O', 'Network Throughput']]
+y_labeled = df_labeled['SLA Violation']
+
+
+
+
+# Load the unlabelled dataset for clustering
+df_unlabelled = pd.read_csv('sla_violation_dataset_extreme_skewed_adjusted.csv')
+
+
+
+
+# Ensure both datasets have the same columns/features
+X_unlabelled = df_unlabelled[['CPU Usage', 'Memory Usage', 'Disk I/O', 'Network Throughput']]
+
+
+
+
+# KMeans Clustering
+kmeans = KMeans(n_clusters=2, random_state=42)
+kmeans_labels = kmeans.fit_predict(X_unlabelled)
+
+
+
+
+# DBSCAN Clustering (adjusted for noise handling)
+dbscan = DBSCAN(eps=0.5, min_samples=5)
+dbscan_labels = dbscan.fit_predict(X_unlabelled)
+
+
+
+
+# Gaussian Mixture Model (GMM)
+gmm = GaussianMixture(n_components=2, random_state=42)
+gmm_labels = gmm.fit_predict(X_unlabelled)
+
+
+
+
+# Affinity Propagation Clustering
+affinity = AffinityPropagation(random_state=42)
+affinity_labels = affinity.fit_predict(X_unlabelled)
+
+
+
+
+
+
+
+
+# Updated function to calculate the accuracy of unsupervised clustering
+def assess_clustering_accuracy(true_labels, predicted_labels):
+  unique_clusters = set(predicted_labels)
+  labels_map = {}
+
+
+
+
+  for cluster in unique_clusters:
+      if cluster == -1:
+          # Skip noise in DBSCAN if present
+          continue
+
+
+
+
+      mask = (predicted_labels == cluster)
+      if len(true_labels[mask]) == 0:
+          # Handle empty clusters
+          labels_map[cluster] = 0
+      else:
+          # Extract the most common label (mode)
+          most_common = mode(true_labels[mask])
+          most_common_label = most_common.mode.item()  # Use .item() to handle scalars directly
+          labels_map[cluster] = most_common_label
+
+
+
+
+  # Map predicted clusters to the majority true labels
+  mapped_labels = pd.Series(predicted_labels).map(labels_map)
+
+
+
+
+  # Replace unmapped labels (like noise) with a default value
+  mapped_labels = mapped_labels.fillna(0)
+
+
+
+
+  # Calculate accuracy
+  accuracy = accuracy_score(true_labels, mapped_labels)
+  return accuracy
+
+
+
+
+
+
+
+
+# Assess the accuracy of each clustering algorithm
+kmeans_accuracy = assess_clustering_accuracy(y_labeled, kmeans_labels)
+dbscan_accuracy = assess_clustering_accuracy(y_labeled, dbscan_labels)
+gmm_accuracy = assess_clustering_accuracy(y_labeled, gmm_labels)
+affinity_accuracy = assess_clustering_accuracy(y_labeled, affinity_labels)
+
+
+
+
+# Print the results
+print("K-Means Accuracy:", kmeans_accuracy)
+print("DBSCAN Accuracy:", dbscan_accuracy)
+print("Gaussian Mixture Model Accuracy:", gmm_accuracy)
+print("Affinity Propagation Accuracy:", affinity_accuracy)
